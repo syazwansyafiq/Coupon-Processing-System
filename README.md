@@ -34,7 +34,7 @@ The system solves three core challenges in coupon processing at scale:
 ## Tech Stack
 
 | Layer | Technology |
-|---|---|
+| --- | --- |
 | Framework | Laravel 13 |
 | Queue workers | Laravel Horizon |
 | Reservation store | Redis 7 |
@@ -47,7 +47,7 @@ The system solves three core challenges in coupon processing at scale:
 
 ## Architecture
 
-```
+```text
 Client
   │
   ▼
@@ -81,7 +81,7 @@ On checkout failure:
 
 ## User Journey
 
-```
+```text
 1. User applies coupon at checkout
          │
          ▼
@@ -116,44 +116,58 @@ On checkout failure:
 
 - Docker >= 24
 - Docker Compose >= 2.20
+- Make
 
-### 1. Clone and configure
+### 1. Clone and install
 
 ```bash
 git clone <repo-url>
 cd Coupon-Processing-System
-cp .env.example .env
+make install
 ```
 
-Edit `.env` and set at minimum:
+`make install` handles everything in one step:
 
-```env
-DB_DATABASE=coupon_system
-DB_USERNAME=laravel
-DB_PASSWORD=secret
-```
+- Copies `.env.example` → `.env`
+- Builds Docker images
+- Starts all containers
+- Waits for MySQL to be ready
+- Generates the app key
+- Runs migrations
+- Seeds sample coupons
 
-### 2. Start all services
-
-```bash
-docker compose up -d --build
-```
-
-This starts: **nginx**, **app** (PHP-FPM), **horizon**, **scheduler**, **mysql**, **redis**.
-
-### 3. Run migrations and seed sample coupons
-
-```bash
-docker compose exec app php artisan migrate
-docker compose exec app php artisan db:seed --class=CouponSeeder
-```
-
-### 4. Access the application
+### 2. Access the application
 
 | Service | URL |
-|---|---|
+| --- | --- |
 | App | http://localhost:8000 |
 | Horizon dashboard | http://localhost:8000/horizon |
+
+### All available commands
+
+```bash
+make install          Bootstrap the project from scratch
+make up               Start all containers
+make down             Stop all containers
+make restart          Restart all containers
+make build            Rebuild images without cache
+make ps               Show running containers
+make logs             Tail logs from all containers
+make logs-app         Tail app container logs only
+make logs-horizon     Tail Horizon worker logs
+make shell            Open a shell inside the app container
+make migrate          Run pending migrations
+make migrate-fresh    Drop all tables and re-run migrations
+make seed             Seed sample coupon data
+make migrate-seed     Fresh migrate + seed
+make horizon          Print the Horizon dashboard URL
+make horizon-pause    Pause all Horizon workers
+make horizon-continue Resume paused Horizon workers
+make queue-flush      Flush all pending jobs from Redis queues
+make test             Run the test suite
+make lint             Auto-fix code style with Pint
+make lint-check       Check code style without fixing
+```
 
 ---
 
