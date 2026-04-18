@@ -17,6 +17,7 @@ use App\Messages\CouponMessage;
 use App\Services\CouponReservationService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 use Symfony\Component\HttpFoundation\Response;
 
 class CouponController extends Controller
@@ -33,6 +34,13 @@ class CouponController extends Controller
     {
         $user = $request->user();
 
+        Log::info('coupon.http.apply.received', [
+            'user_id'     => $user->id,
+            'coupon_code' => $request->input('coupon_code'),
+            'cart_id'     => $request->input('cart_id'),
+            'cart_value'  => $request->input('cart_value'),
+        ]);
+
         $idempotencyKey = $this->buildIdempotencyKey(
             $user->id,
             $request->input('coupon_code'),
@@ -40,6 +48,13 @@ class CouponController extends Controller
         );
 
         $existing = $this->reservationService->getStatus($idempotencyKey);
+
+        Log::info('coupon.http.apply.dispatching', [
+            'user_id'         => $user->id,
+            'coupon_code'     => $request->input('coupon_code'),
+            'idempotency_key' => $idempotencyKey,
+            'existing_status' => $existing['status'] ?? null,
+        ]);
 
         if ($existing && in_array($existing['status'], [
             CouponStatus::Processing->value,
@@ -78,6 +93,11 @@ class CouponController extends Controller
      */
     public function status(Request $request, string $requestId): JsonResponse
     {
+        Log::info('coupon.http.status.poll', [
+            'request_id' => $requestId,
+            'user_id'    => $request->user()?->id,
+        ]);
+
         $status = $this->reservationService->getStatus($requestId);
 
         if (! $status) {
@@ -97,6 +117,13 @@ class CouponController extends Controller
     public function consume(ConsumeCouponRequest $request): JsonResponse
     {
         $user = $request->user();
+
+        Log::info('coupon.http.consume.received', [
+            'user_id'     => $user->id,
+            'coupon_code' => $request->input('coupon_code'),
+            'order_id'    => $request->input('order_id'),
+            'request_id'  => $request->input('request_id'),
+        ]);
         $cart = CartContext::fromArray([
             'cart_id' => $request->input('cart_id'),
             'user_id' => $user->id,
@@ -126,6 +153,13 @@ class CouponController extends Controller
     public function release(ReleaseCouponRequest $request): JsonResponse
     {
         $user = $request->user();
+
+        Log::info('coupon.http.release.received', [
+            'user_id'     => $user->id,
+            'coupon_code' => $request->input('coupon_code'),
+            'request_id'  => $request->input('request_id'),
+            'reason'      => $request->input('reason', 'checkout_failed'),
+        ]);
         $cart = CartContext::fromArray([
             'cart_id' => $request->input('cart_id'),
             'user_id' => $user->id,

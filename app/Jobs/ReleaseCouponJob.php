@@ -11,6 +11,7 @@ use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
+use Illuminate\Support\Facades\Log;
 
 class ReleaseCouponJob implements ShouldQueue
 {
@@ -31,6 +32,13 @@ class ReleaseCouponJob implements ShouldQueue
 
     public function handle(CouponReservationService $reservationService): void
     {
+        Log::info('coupon.job.release.start', [
+            'coupon_code'     => $this->couponCode,
+            'user_id'         => $this->cart->userId,
+            'idempotency_key' => $this->idempotencyKey,
+            'reason'          => $this->reason,
+        ]);
+
         $reservationService->release($this->couponCode, $this->cart->userId);
 
         TrackCouponEventJob::dispatch(
@@ -42,9 +50,15 @@ class ReleaseCouponJob implements ShouldQueue
         );
 
         $reservationService->setStatus($this->idempotencyKey, [
-            'status' => CouponStatus::Released->value,
+            'status'  => CouponStatus::Released->value,
             'message' => CouponMessage::RESERVATION_RELEASED,
-            'reason' => $this->reason,
+            'reason'  => $this->reason,
+        ]);
+
+        Log::info('coupon.job.release.complete', [
+            'coupon_code'     => $this->couponCode,
+            'user_id'         => $this->cart->userId,
+            'idempotency_key' => $this->idempotencyKey,
         ]);
     }
 }

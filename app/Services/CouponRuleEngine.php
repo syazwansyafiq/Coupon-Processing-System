@@ -8,40 +8,99 @@ use App\Models\Coupon;
 use App\Models\CouponSetting;
 use App\Models\CouponUsage;
 use Carbon\Carbon;
+use Illuminate\Support\Facades\Log;
 
 class CouponRuleEngine
 {
-    /**
-     * Validate a coupon against the latest active settings and the given cart context.
-     * Always loads fresh settings from DB — never from cache — so rule changes are immediate.
-     */
     public function validate(string $couponCode, CartContext $cart): CouponValidationResult
     {
+        Log::info('coupon.rule_engine.validate.start', [
+            'coupon_code' => $couponCode,
+            'user_id'     => $cart->userId,
+            'cart_id'     => $cart->cartId,
+            'cart_value'  => $cart->cartValue,
+        ]);
+
         $coupon = Coupon::where('code', $couponCode)->first();
 
+        Log::info('coupon.rule_engine.db.coupon_lookup', [
+            'coupon_code' => $couponCode,
+            'found'       => $coupon !== null,
+            'coupon_id'   => $coupon?->id,
+        ]);
+
         if (! $coupon) {
+            Log::warning('coupon.rule_engine.validate.failed', [
+                'coupon_code' => $couponCode,
+                'user_id'     => $cart->userId,
+                'reason'      => 'coupon_not_found',
+            ]);
+
             return CouponValidationResult::fail('coupon_not_found');
         }
 
         if (! $coupon->isCurrentlyValid()) {
+            Log::warning('coupon.rule_engine.validate.failed', [
+                'coupon_code' => $couponCode,
+                'user_id'     => $cart->userId,
+                'reason'      => 'coupon_inactive_or_expired',
+                'is_active'   => $coupon->is_active,
+                'valid_from'  => $coupon->valid_from,
+                'valid_until' => $coupon->valid_until,
+            ]);
+
             return CouponValidationResult::fail('coupon_inactive_or_expired');
         }
 
         $setting = $coupon->latestActiveSetting();
 
+        Log::info('coupon.rule_engine.db.settings_lookup', [
+            'coupon_code'     => $couponCode,
+            'setting_found'   => $setting !== null,
+            'setting_version' => $setting?->version,
+        ]);
+
         if (! $setting) {
+            Log::warning('coupon.rule_engine.validate.failed', [
+                'coupon_code' => $couponCode,
+                'user_id'     => $cart->userId,
+                'reason'      => 'no_active_settings',
+            ]);
+
             return CouponValidationResult::fail('no_active_settings');
         }
 
         if ($failed = $this->checkUsageLimits($coupon, $setting, $cart)) {
+            Log::warning('coupon.rule_engine.validate.failed', [
+                'coupon_code'     => $couponCode,
+                'user_id'         => $cart->userId,
+                'reason'          => $failed,
+                'setting_version' => $setting->version,
+            ]);
+
             return CouponValidationResult::fail($failed);
         }
 
         if ($failed = $this->checkCartRules($setting, $cart)) {
+            Log::warning('coupon.rule_engine.validate.failed', [
+                'coupon_code'     => $couponCode,
+                'user_id'         => $cart->userId,
+                'reason'          => $failed,
+                'setting_version' => $setting->version,
+            ]);
+
             return CouponValidationResult::fail($failed);
         }
 
         $discount = $this->calculateDiscount($coupon, $cart->cartValue);
+
+        Log::info('coupon.rule_engine.validate.passed', [
+            'coupon_code'     => $couponCode,
+            'user_id'         => $cart->userId,
+            'setting_version' => $setting->version,
+            'discount_amount' => $discount,
+            'coupon_type'     => $coupon->type,
+        ]);
 
         return CouponValidationResult::pass(
             discountAmount: $discount,
@@ -55,6 +114,13 @@ class CouponRuleEngine
     {
         if ($setting->global_usage_limit !== null) {
             $globalUsed = CouponUsage::where('coupon_id', $coupon->id)->count();
+
+            Log::info('coupon.rule_engine.db.global_usage_count', [
+                'coupon_code'        => $coupon->code,
+                'global_used'        => $globalUsed,
+                'global_usage_limit' => $setting->global_usage_limit,
+            ]);
+
             if ($globalUsed >= $setting->global_usage_limit) {
                 return 'global_limit_reached';
             }
@@ -64,6 +130,14 @@ class CouponRuleEngine
             $userUsed = CouponUsage::where('coupon_id', $coupon->id)
                 ->where('user_id', $cart->userId)
                 ->count();
+
+            Log::info('coupon.rule_engine.db.user_usage_count', [
+                'coupon_code'    => $coupon->code,
+                'user_id'        => $cart->userId,
+                'user_used'      => $userUsed,
+                'per_user_limit' => $setting->per_user_limit,
+            ]);
+
             if ($userUsed >= $setting->per_user_limit) {
                 return 'user_limit_reached';
             }
@@ -136,7 +210,6 @@ class CouponRuleEngine
             return round($cartValue * ((float) $coupon->value / 100), 2);
         }
 
-        // Fixed discount — never exceed cart value
         return min((float) $coupon->value, $cartValue);
     }
 }

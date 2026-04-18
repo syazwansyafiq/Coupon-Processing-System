@@ -2,21 +2,13 @@
 
 namespace App\Services;
 
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Redis;
 
 class CouponReservationService
 {
     private const RESERVATION_TTL = 300; // 5 minutes in seconds
 
-    /**
-     * Atomically reserve a coupon for a user using a Lua script.
-     *
-     * Uses a Sorted Set (ZADD) for the active-reservations set so expired entries
-     * are prunable without relying on decrement counters that can drift on TTL expiry.
-     *
-     * Returns true on success (including idempotent re-reservation), false if
-     * the global slot is already full.
-     */
     public function reserve(
         string $couponCode,
         int $userId,
@@ -27,6 +19,15 @@ class CouponReservationService
         $reservationKey = $this->reservationKey($couponCode, $userId);
         $setKey = $this->reservationSetKey($couponCode);
         $expireAt = time() + self::RESERVATION_TTL;
+
+        Log::info('coupon.redis.reserve.attempt', [
+            'coupon_code'          => $couponCode,
+            'user_id'              => $userId,
+            'idempotency_key'      => $idempotencyKey,
+            'global_usage_limit'   => $globalUsageLimit,
+            'current_global_usage' => $currentGlobalUsage,
+            'reservation_key'      => $reservationKey,
+        ]);
 
         $script = <<<'LUA'
         local res_key      = KEYS[1]
@@ -64,11 +65,11 @@ class CouponReservationService
         LUA;
 
         $payload = json_encode([
-            'coupon_code' => $couponCode,
-            'user_id' => $userId,
+            'coupon_code'     => $couponCode,
+            'user_id'         => $userId,
             'idempotency_key' => $idempotencyKey,
-            'reserved_at' => now()->toIso8601String(),
-            'expires_at' => now()->addSeconds(self::RESERVATION_TTL)->toIso8601String(),
+            'reserved_at'     => now()->toIso8601String(),
+            'expires_at'      => now()->addSeconds(self::RESERVATION_TTL)->toIso8601String(),
         ]);
 
         $result = Redis::eval(
@@ -84,13 +85,28 @@ class CouponReservationService
             $payload,
         );
 
-        return (bool) $result;
+        $reserved = (bool) $result;
+
+        Log::info('coupon.redis.reserve.result', [
+            'coupon_code'     => $couponCode,
+            'user_id'         => $userId,
+            'idempotency_key' => $idempotencyKey,
+            'reserved'        => $reserved,
+        ]);
+
+        return $reserved;
     }
 
     public function release(string $couponCode, int $userId): void
     {
         $reservationKey = $this->reservationKey($couponCode, $userId);
         $setKey = $this->reservationSetKey($couponCode);
+
+        Log::info('coupon.redis.release', [
+            'coupon_code'     => $couponCode,
+            'user_id'         => $userId,
+            'reservation_key' => $reservationKey,
+        ]);
 
         Redis::pipeline(function ($pipe) use ($reservationKey, $setKey) {
             $pipe->del($reservationKey);
@@ -100,42 +116,81 @@ class CouponReservationService
 
     public function exists(string $couponCode, int $userId): bool
     {
-        return (bool) Redis::exists($this->reservationKey($couponCode, $userId));
+        $exists = (bool) Redis::exists($this->reservationKey($couponCode, $userId));
+
+        Log::info('coupon.redis.exists', [
+            'coupon_code' => $couponCode,
+            'user_id'     => $userId,
+            'exists'      => $exists,
+        ]);
+
+        return $exists;
     }
 
     public function get(string $couponCode, int $userId): ?array
     {
         $data = Redis::get($this->reservationKey($couponCode, $userId));
+        $result = $data ? json_decode($data, true) : null;
 
-        return $data ? json_decode($data, true) : null;
+        Log::info('coupon.redis.get', [
+            'coupon_code' => $couponCode,
+            'user_id'     => $userId,
+            'found'       => $result !== null,
+        ]);
+
+        return $result;
     }
 
     public function activeCount(string $couponCode): int
     {
         $setKey = $this->reservationSetKey($couponCode);
         Redis::zremrangebyscore($setKey, '-inf', (string) time());
+        $count = (int) Redis::zcard($setKey);
 
-        return (int) Redis::zcard($setKey);
+        Log::info('coupon.redis.active_count', [
+            'coupon_code'  => $couponCode,
+            'active_count' => $count,
+        ]);
+
+        return $count;
     }
 
     public function setStatus(string $idempotencyKey, array $status, int $ttl = 600): void
     {
+        Log::info('coupon.redis.set_status', [
+            'idempotency_key' => $idempotencyKey,
+            'status'          => $status['status'],
+            'ttl'             => $ttl,
+        ]);
+
         Redis::setex("coupon:status:{$idempotencyKey}", $ttl, json_encode($status));
     }
 
     public function getStatus(string $idempotencyKey): ?array
     {
         $data = Redis::get("coupon:status:{$idempotencyKey}");
+        $result = $data ? json_decode($data, true) : null;
 
-        return $data ? json_decode($data, true) : null;
+        Log::info('coupon.redis.get_status', [
+            'idempotency_key' => $idempotencyKey,
+            'found'           => $result !== null,
+            'status'          => $result['status'] ?? null,
+        ]);
+
+        return $result;
     }
 
-    /** Release all reservations whose TTL has passed but whose set entry lingers. */
     public function pruneExpiredReservations(string $couponCode): int
     {
         $setKey = $this->reservationSetKey($couponCode);
+        $pruned = (int) Redis::zremrangebyscore($setKey, '-inf', (string) time());
 
-        return (int) Redis::zremrangebyscore($setKey, '-inf', (string) time());
+        Log::info('coupon.redis.prune_expired', [
+            'coupon_code'  => $couponCode,
+            'pruned_count' => $pruned,
+        ]);
+
+        return $pruned;
     }
 
     private function reservationKey(string $couponCode, int $userId): string

@@ -9,12 +9,8 @@ use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
+use Illuminate\Support\Facades\Log;
 
-/**
- * Scheduled recovery job — prunes stale entries from Redis reservation sets.
- * Redis TTLs handle individual reservation keys; this job cleans the sorted sets
- * so activeCount() stays accurate. Schedule via Horizon or artisan schedule.
- */
 class ReleaseExpiredReservationsJob implements ShouldQueue
 {
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
@@ -29,15 +25,17 @@ class ReleaseExpiredReservationsJob implements ShouldQueue
 
     public function handle(CouponReservationService $reservationService): void
     {
-        Coupon::where('is_active', true)->each(function (Coupon $coupon) use ($reservationService) {
-            $pruned = $reservationService->pruneExpiredReservations($coupon->code);
+        Log::info('coupon.job.release_expired.start');
 
-            if ($pruned > 0) {
-                \Log::info('Pruned expired coupon reservations', [
-                    'coupon_code' => $coupon->code,
-                    'pruned_count' => $pruned,
-                ]);
-            }
+        $totalPruned = 0;
+
+        Coupon::where('is_active', true)->each(function (Coupon $coupon) use ($reservationService, &$totalPruned) {
+            $pruned = $reservationService->pruneExpiredReservations($coupon->code);
+            $totalPruned += $pruned;
         });
+
+        Log::info('coupon.job.release_expired.complete', [
+            'total_pruned' => $totalPruned,
+        ]);
     }
 }
