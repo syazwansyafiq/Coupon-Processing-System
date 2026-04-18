@@ -1,0 +1,59 @@
+meta {
+  name: Poll Status
+  type: http
+  seq: 2
+}
+
+get {
+  url: {{baseUrl}}/api/coupons/status/{{requestId}}
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+headers {
+  Accept: application/json
+}
+
+script:post-response {
+  const body = res.getBody();
+
+  if (body.data) {
+    const { status, discount_amount, setting_version } = body.data;
+
+    console.log("Coupon status:", status);
+
+    if (status === "reserved") {
+      bru.setVar("discountAmount", discount_amount);
+      bru.setVar("settingVersion", setting_version);
+      console.log("discount_amount and setting_version saved for consume request");
+    }
+  }
+}
+
+docs {
+  # Poll Coupon Status
+
+  Polls the async validation result using the `request_id` returned by **Apply Coupon**.
+  The `{{requestId}}` variable is auto-populated by the Apply Coupon post-response script.
+
+  Call this repeatedly until `status` is no longer `processing`.
+
+  ## Status values
+  | Status | Meaning | Next step |
+  | --- | --- | --- |
+  | `processing` | Job still running | Poll again |
+  | `reserved` | Coupon valid, reserved for 5 minutes | Call **Consume Coupon** on checkout success |
+  | `failed` | Validation failed — see `message` for reason | Show error to user |
+  | `consumed` | Coupon permanently applied to an order | No action needed |
+  | `released` | Reservation was freed | User may retry |
+  | `error` | System error | Safe to retry the apply |
+  | `not_found` | `request_id` expired or invalid | Re-apply |
+
+  ## On `reserved` response
+  The post-response script saves `discount_amount` and `setting_version` to environment
+  variables so **Consume Coupon** can use them directly.
+}

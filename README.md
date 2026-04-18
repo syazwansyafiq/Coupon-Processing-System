@@ -177,7 +177,7 @@ All endpoints require authentication (`Authorization: Bearer <token>`).
 
 ### Apply a coupon
 
-```
+```http
 POST /api/coupons/apply
 ```
 
@@ -210,14 +210,14 @@ POST /api/coupons/apply
 
 ### Poll for validation result
 
-```
+```http
 GET /api/coupons/status/{requestId}
 ```
 
 **Response** `200 OK` — possible status values:
 
 | Status | Meaning |
-|---|---|
+| --- | --- |
 | `processing` | Job is still running |
 | `reserved` | Coupon valid and reserved for 5 minutes |
 | `failed` | Validation failed — see `message` for reason |
@@ -244,7 +244,7 @@ GET /api/coupons/status/{requestId}
 
 ### Consume a coupon (checkout success)
 
-```
+```http
 POST /api/coupons/consume
 ```
 
@@ -266,7 +266,7 @@ POST /api/coupons/consume
 
 ### Release a coupon (checkout failure)
 
-```
+```http
 POST /api/coupons/release
 ```
 
@@ -289,7 +289,7 @@ POST /api/coupons/release
 Three supervisor pools handle different workloads:
 
 | Queue | Supervisor | Workers (prod) | Timeout | Used for |
-|---|---|---|---|---|
+| --- | --- | --- | --- | --- |
 | `high` | supervisor-high | 3 – 15 | 30s | Coupon validation |
 | `default` | supervisor-default | 2 – 8 | 30s | Consume, release |
 | `low` | supervisor-low | 1 – 5 | 60s | Event tracking, cleanup |
@@ -307,7 +307,7 @@ View the Horizon dashboard at `/horizon` to monitor throughput, failed jobs, and
 **Supported rules (stored as JSON in `coupon_settings.rules`)**
 
 | Rule | Type | Description |
-|---|---|---|
+| --- | --- | --- |
 | `global_usage_limit` | integer | Maximum total redemptions |
 | `per_user_limit` | integer | Maximum redemptions per user |
 | `min_cart_value` | decimal | Minimum cart total required |
@@ -339,7 +339,7 @@ Reservations use a **Lua script executed atomically inside Redis**, preventing r
 **Redis key layout**
 
 | Key | Type | TTL | Purpose |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | `coupon:res:{code}:{user_id}` | String | 5 min | Reservation payload (idempotency guard) |
 | `coupon:res_set:{code}` | Sorted Set | 5 min + 60s | Active reservation set, scored by expiry timestamp |
 | `coupon:status:{idempotency_key}` | String | 10 min | Async job result for client polling |
@@ -363,7 +363,7 @@ Every coupon lifecycle transition is recorded in `coupon_events` via `TrackCoupo
 **Event types**
 
 | Event | Trigger |
-|---|---|
+| --- | --- |
 | `applied` | User submits a coupon |
 | `validation_passed` | Rule engine passes |
 | `validation_failed` | Rule engine rejects, or reservation slot full |
@@ -404,7 +404,7 @@ The `rule_version` column is indexed for analytics queries like "how many coupon
 ### Job retries
 
 | Job | Tries | Backoff |
-|---|---|---|
+| --- | --- | --- |
 | `ValidateCouponJob` | 3 | 5s |
 | `ConsumeCouponJob` | 5 | 10s |
 | `ReleaseCouponJob` | 5 | 5s |

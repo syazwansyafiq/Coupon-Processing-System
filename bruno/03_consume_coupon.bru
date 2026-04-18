@@ -1,0 +1,52 @@
+meta {
+  name: Consume Coupon
+  type: http
+  seq: 3
+}
+
+post {
+  url: {{baseUrl}}/api/coupons/consume
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+headers {
+  Accept: application/json
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "coupon_code": "{{couponCode}}",
+    "cart_id": "{{cartId}}",
+    "cart_value": {{cartValue}},
+    "order_id": "{{orderId}}",
+    "discount_amount": {{discountAmount}},
+    "setting_version": {{settingVersion}},
+    "request_id": "{{requestId}}"
+  }
+}
+
+docs {
+  # Consume Coupon
+
+  Called **after checkout succeeds**. Dispatches `ConsumeCouponJob` which permanently
+  records the coupon usage in MySQL and releases the Redis reservation.
+
+  ## Prerequisites
+  - `{{requestId}}` — auto-saved by Apply Coupon script
+  - `{{discountAmount}}` — auto-saved by Poll Status script when status is `reserved`
+  - `{{settingVersion}}` — auto-saved by Poll Status script when status is `reserved`
+  - `{{orderId}}` — set manually in the environment to your order ID
+
+  ## Idempotency
+  Safe to call multiple times for the same `order_id`. If the coupon was already
+  consumed for that order, the job exits early with no side effects.
+
+  ## After this call
+  Poll **Poll Status** with the same `request_id` — status will update to `consumed`.
+}

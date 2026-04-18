@@ -1,0 +1,67 @@
+meta {
+  name: Apply Coupon
+  type: http
+  seq: 1
+}
+
+post {
+  url: {{baseUrl}}/api/coupons/apply
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+headers {
+  Accept: application/json
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "coupon_code": "{{couponCode}}",
+    "cart_id": "{{cartId}}",
+    "cart_value": {{cartValue}},
+    "item_categories": {{itemCategories}},
+    "product_ids": {{productIds}},
+    "user_segments": {{userSegments}}
+  }
+}
+
+script:post-response {
+  const body = res.getBody();
+
+  if (body.data && body.data.request_id) {
+    bru.setVar("requestId", body.data.request_id);
+    console.log("request_id saved:", body.data.request_id);
+  }
+}
+
+docs {
+  # Apply Coupon
+
+  Dispatches `ValidateCouponJob` and returns **immediately** with a `request_id`.
+  Validation runs asynchronously — do not wait for a synchronous result here.
+
+  ## Flow
+  1. Submit this request
+  2. Copy the returned `request_id` (auto-saved to `{{requestId}}` via post-response script)
+  3. Poll **Poll Status** until `status` is `reserved` or `failed`
+
+  ## Possible responses
+  | Status | Meaning |
+  | --- | --- |
+  | `processing` | Job queued, not yet complete |
+  | `reserved` | Already reserved from a previous call (idempotent) |
+  | `consumed` | Already consumed from a previous call (idempotent) |
+
+  ## Sample coupons (from seeder)
+  | Code | Type | Value | Rules |
+  | --- | --- | --- | --- |
+  | `SUMMER20` | percentage | 20% | min cart $30, 1 use per user |
+  | `WELCOME10` | fixed | $10 | first-time user only |
+  | `FLASH30` | percentage | 30% | electronics/gadgets category, 10:00–14:00 only |
+  | `VIP50` | percentage | 50% | vip/premium segment, min cart $100 |
+}

@@ -1,0 +1,56 @@
+meta {
+  name: Release Coupon
+  type: http
+  seq: 4
+}
+
+post {
+  url: {{baseUrl}}/api/coupons/release
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+headers {
+  Accept: application/json
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "coupon_code": "{{couponCode}}",
+    "cart_id": "{{cartId}}",
+    "cart_value": {{cartValue}},
+    "request_id": "{{requestId}}",
+    "reason": "checkout_failed"
+  }
+}
+
+docs {
+  # Release Coupon
+
+  Called when **checkout fails or is cancelled**. Dispatches `ReleaseCouponJob`
+  which removes the Redis reservation so the coupon slot becomes available again.
+
+  ## When to call
+  - Payment declined
+  - User cancels checkout
+  - Checkout session times out
+
+  ## `reason` field (optional)
+  Pass a short string describing why the reservation is being released.
+  Stored in `coupon_events` for audit purposes.
+
+  | Value | Meaning |
+  | --- | --- |
+  | `checkout_failed` | Payment or checkout process failed (default) |
+  | `user_cancelled` | User explicitly abandoned the cart |
+  | `timeout` | Checkout session expired |
+
+  ## After this call
+  Poll **Poll Status** — status will update to `released`.
+  The user may re-apply the same coupon from scratch.
+}
