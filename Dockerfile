@@ -1,15 +1,4 @@
-# ── Stage 1: frontend assets ──────────────────────────────────────────────────
-FROM node:22-alpine AS assets
-
-WORKDIR /app
-
-COPY package*.json ./
-RUN npm ci
-
-COPY . .
-RUN npm run build
-
-# ── Stage 2: PHP dependencies ─────────────────────────────────────────────────
+# ── Stage 1: PHP dependencies ─────────────────────────────────────────────────
 FROM composer:2 AS vendor
 
 WORKDIR /app
@@ -23,10 +12,24 @@ RUN composer install \
     --ignore-platform-reqs
 
 COPY . .
-RUN composer dump-autoload --optimize --no-dev
+RUN composer dump-autoload --optimize --no-dev --no-scripts
+
+# ── Stage 2: frontend assets ──────────────────────────────────────────────────
+FROM node:22-alpine AS assets
+
+WORKDIR /app
+
+COPY package*.json ./
+RUN npm ci
+
+# Vendor must be present so Vite can resolve vendor CSS (e.g. livewire/flux)
+COPY --from=vendor /app/vendor ./vendor
+
+COPY . .
+RUN npm run build
 
 # ── Stage 3: production image ─────────────────────────────────────────────────
-FROM php:8.3-fpm-alpine AS production
+FROM php:8.4-fpm-alpine AS production
 
 LABEL maintainer="Coupon Processing System"
 
@@ -64,6 +67,8 @@ RUN pecl install redis \
  && apk del autoconf g++ make linux-headers
 
 COPY docker/php/php.ini "$PHP_INI_DIR/conf.d/app.ini"
+COPY docker/entrypoint.sh /usr/local/bin/entrypoint.sh
+RUN chmod +x /usr/local/bin/entrypoint.sh
 
 WORKDIR /var/www/html
 
@@ -80,4 +85,5 @@ RUN chown -R www-data:www-data /var/www/html/storage /var/www/html/bootstrap/cac
  && chmod -R 775 /var/www/html/storage /var/www/html/bootstrap/cache
 
 EXPOSE 9000
+ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
 CMD ["php-fpm"]

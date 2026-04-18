@@ -14,10 +14,12 @@ install: ## Bootstrap the project from scratch
 	@until docker compose exec mysql mysqladmin ping -h localhost --silent; do sleep 2; done
 	@echo "Generating app key ..."
 	$(APP) php artisan key:generate
+	@echo "Discovering packages ..."
+	$(APP) php artisan package:discover --ansi
 	@echo "Running migrations ..."
 	$(APP) php artisan migrate --force
-	@echo "Seeding sample coupons ..."
-	$(APP) php artisan db:seed --class=CouponSeeder
+	@echo "Seeding database ..."
+	$(APP) php artisan db:seed
 	@echo ""
 	@echo "Done. App running at http://localhost:$${APP_PORT:-8000}"
 	@echo "Horizon dashboard → http://localhost:$${APP_PORT:-8000}/horizon"

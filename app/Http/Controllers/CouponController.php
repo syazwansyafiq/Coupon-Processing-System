@@ -72,7 +72,7 @@ class CouponController extends Controller
             'item_categories' => $request->input('item_categories', []),
             'product_ids' => $request->input('product_ids', []),
             'user_segments' => $request->input('user_segments', []),
-            'is_first_order' => $user->orders()->doesntExist(),
+            'is_first_order' => ! \App\Models\CouponUsage::where('user_id', $user->id)->exists(),
         ]);
 
         ValidateCouponJob::dispatch(

@@ -27,11 +27,15 @@ services:
       DB_CONNECTION: mysql
       DB_HOST: mysql
       DB_PORT: 3306
+      DB_DATABASE: "${DB_DATABASE:-coupon_system}"
+      DB_USERNAME: "${DB_USERNAME:-laravel}"
+      DB_PASSWORD: "${DB_PASSWORD:-secret}"
       REDIS_HOST: redis
       REDIS_PORT: 6379
       QUEUE_CONNECTION: redis
       CACHE_STORE: redis
     volumes:
+      - ./.env:/var/www/html/.env
       - app_storage:/var/www/html/storage
       - app_cache:/var/www/html/bootstrap/cache
     depends_on:
@@ -60,11 +64,15 @@ services:
       DB_CONNECTION: mysql
       DB_HOST: mysql
       DB_PORT: 3306
+      DB_DATABASE: "${DB_DATABASE:-coupon_system}"
+      DB_USERNAME: "${DB_USERNAME:-laravel}"
+      DB_PASSWORD: "${DB_PASSWORD:-secret}"
       REDIS_HOST: redis
       REDIS_PORT: 6379
       QUEUE_CONNECTION: redis
       CACHE_STORE: redis
     volumes:
+      - ./.env:/var/www/html/.env
       - app_storage:/var/www/html/storage
       - app_cache:/var/www/html/bootstrap/cache
     depends_on:
@@ -88,11 +96,15 @@ services:
       DB_CONNECTION: mysql
       DB_HOST: mysql
       DB_PORT: 3306
+      DB_DATABASE: "${DB_DATABASE:-coupon_system}"
+      DB_USERNAME: "${DB_USERNAME:-laravel}"
+      DB_PASSWORD: "${DB_PASSWORD:-secret}"
       REDIS_HOST: redis
       REDIS_PORT: 6379
       QUEUE_CONNECTION: redis
       CACHE_STORE: redis
     volumes:
+      - ./.env:/var/www/html/.env
       - app_storage:/var/www/html/storage
       - app_cache:/var/www/html/bootstrap/cache
     depends_on:

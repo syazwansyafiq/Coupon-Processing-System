@@ -1,7 +1,6 @@
 .git
 .github
 node_modules
-vendor
 public/build
 public/hot
 storage/logs/*.log
@@ -12,8 +11,9 @@ bootstrap/cache/*.php
 .env
 .env.*
 !.env.example
-docker
+docker/nginx
 *.md
 *.lock
+!composer.lock
 phpunit.xml
 tests/

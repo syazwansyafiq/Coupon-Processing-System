@@ -1,0 +1,36 @@
+meta {
+  name: Logout
+  type: http
+  seq: 5
+}
+
+delete {
+  url: {{baseUrl}}/api/auth/logout
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+headers {
+  Accept: application/json
+}
+
+script:post-response {
+  if (res.getStatus() === 200) {
+    bru.setVar("token", "");
+    console.log("token cleared");
+  }
+}
+
+docs {
+  # Logout
+
+  Revokes the current Sanctum Bearer token.
+  The post-response script clears `{{token}}` from the environment
+  so subsequent requests will correctly fail with 401.
+
+  Run **Login** again to get a fresh token.
+}
