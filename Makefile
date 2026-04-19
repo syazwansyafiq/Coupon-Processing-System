@@ -1,5 +1,6 @@
-.PHONY: install up down restart build logs shell migrate migrate-fresh \
-        seed horizon test lint ps help
+.PHONY: install up down restart build logs logs-app logs-horizon shell \
+        migrate migrate-fresh seed migrate-seed horizon horizon-pause \
+        horizon-continue queue-flush test lint lint-check ps help
 
 # ── Config ────────────────────────────────────────────────────────────────────
 APP = docker compose exec app
@@ -8,6 +9,10 @@ APP = docker compose exec app
 install: ## Bootstrap the project from scratch
 	@echo "Copying .env.example → .env ..."
 	@[ -f .env ] || cp .env.example .env
+	@echo ""
+	@echo "⚠  Make sure API_KEY is set in .env before proceeding."
+	@echo "   Press Ctrl+C to abort and edit .env, or wait 5s to continue."
+	@sleep 5
 	@echo "Building and starting containers ..."
 	docker compose up -d --build
 	@echo "Waiting for MySQL to be ready ..."
@@ -23,6 +28,11 @@ install: ## Bootstrap the project from scratch
 	@echo ""
 	@echo "Done. App running at http://localhost:$${APP_PORT:-8000}"
 	@echo "Horizon dashboard → http://localhost:$${APP_PORT:-8000}/horizon"
+	@echo ""
+	@echo "Get a Bearer token:"
+	@echo "  curl -s -X POST http://localhost:$${APP_PORT:-8000}/api/token \\"
+	@echo "       -H 'Content-Type: application/json' \\"
+	@echo "       -d '{\"api_key\":\"'$$(grep ^API_KEY .env | cut -d= -f2)'\"}'"
 
 # ── Docker lifecycle ──────────────────────────────────────────────────────────
 up: ## Start all containers
@@ -59,8 +69,8 @@ migrate: ## Run pending migrations
 migrate-fresh: ## Drop all tables and re-run migrations
 	$(APP) php artisan migrate:fresh
 
-seed: ## Seed sample coupon data
-	$(APP) php artisan db:seed --class=CouponSeeder
+seed: ## Seed database (users + coupons)
+	$(APP) php artisan db:seed
 
 migrate-seed: ## Fresh migrate + seed
 	$(APP) php artisan migrate:fresh --seed
@@ -77,6 +87,13 @@ horizon-continue: ## Resume paused Horizon workers
 
 queue-flush: ## Flush all pending jobs from Redis queues
 	$(APP) php artisan queue:flush
+
+# ── API token ─────────────────────────────────────────────────────────────────
+token: ## Fetch a Bearer token using API_KEY from .env
+	@API_KEY=$$(grep ^API_KEY .env | cut -d= -f2); \
+	curl -s -X POST http://localhost:$${APP_PORT:-8000}/api/token \
+	     -H "Content-Type: application/json" \
+	     -d "{\"api_key\":\"$$API_KEY\"}" | python3 -m json.tool
 
 # ── Testing & linting ─────────────────────────────────────────────────────────
 test: ## Run the test suite

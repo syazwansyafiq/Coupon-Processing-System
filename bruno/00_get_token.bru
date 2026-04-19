@@ -1,0 +1,50 @@
+meta {
+  name: Get Token
+  type: http
+  seq: 0
+}
+
+post {
+  url: {{baseUrl}}/api/token
+  body: json
+  auth: none
+}
+
+headers {
+  Accept: application/json
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "api_key": "{{apiKey}}"
+  }
+}
+
+script:post-response {
+  const body = res.getBody();
+
+  if (body.token) {
+    bru.setVar("token", body.token);
+    console.log("token saved for:", body.email);
+  }
+}
+
+docs {
+  # Get Token
+
+  Exchange the API key for a Sanctum Bearer token.
+  The post-response script auto-saves the token to `{{token}}`.
+
+  Set `{{apiKey}}` in your environment to match `API_KEY` in `.env`.
+
+  ## Response
+  ```json
+  {
+    "token": "<plaintext-token>",
+    "type": "Bearer",
+    "name": "Test User",
+    "email": "test@example.com"
+  }
+  ```
+}

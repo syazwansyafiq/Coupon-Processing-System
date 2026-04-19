@@ -13,6 +13,7 @@ class TokenResource extends JsonResource
         private readonly string $email,
     ) {
         parent::__construct(null);
+        static::withoutWrapping();
     }
 
     public function toArray(Request $request): array
